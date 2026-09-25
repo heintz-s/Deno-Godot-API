@@ -21,12 +21,6 @@ const rooms = new Map<string, Room>();
 // HIER ARBEITEN DIE STUDIERENDEN: EXTERNE KI / API ANRUFEN
 // ============================================================================
 async function callAiBot(lastSentence: string): Promise<string> {
-  const apiKey = Deno.env.get("GROQ_API_KEY");
-
-  // Fallback, falls kein API-Key gesetzt ist (funktioniert auch offline!)
-  if (!apiKey) {
-    return `[Bot]: Plötzlich geschah etwas unerwartetes...`;
-  }
 
   try {
     const prompt = `Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter), der hieran anknüpft: "${lastSentence}". Antworte NUR mit diesem einen Satz, keine Einleitung, keine Anführungszeichen.`;
