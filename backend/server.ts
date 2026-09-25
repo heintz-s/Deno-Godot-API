@@ -49,7 +49,7 @@ async function callAiBot(lastSentence: string): Promise<string> {
     console.error("Fehler beim Pollinations-Aufruf:", err);
     return "[Bot]: Und dann nahm die Geschichte eine seltsame Wendung.";
   }
-
+}
 // ============================================================================
 // WEBSOCKET GAME ENGINE (Müssen Studierende kaum verändern)
 // ============================================================================
