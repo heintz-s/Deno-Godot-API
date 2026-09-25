@@ -30,14 +30,14 @@ async function callAiBot(lastSentence: string): Promise<string> {
 
   try {
     // Echter KI-Aufruf (z. B. Groq / Llama 3)
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const res = await fetch("https://text.pollinations.ai/openai", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: "mistral", // oder "openai", "llama"
         messages: [
           {
             role: "system",
