@@ -1,5 +1,5 @@
 // server.ts
-// Starten mit: deno run --allow-net --allow-env server.ts
+// Starten mit: deno run --allow-net --allow-env --env-file=.env server.ts
 
 interface Player {
   id: string;
@@ -18,35 +18,68 @@ interface Room {
 const rooms = new Map<string, Room>();
 
 // ============================================================================
+// KONFIGURATION: API-Key kommt aus der Umgebung (.env), NICHT aus dem Code!
+// ============================================================================
+const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
+const MISTRAL_MODEL = Deno.env.get("MISTRAL_MODEL") ?? "mistral-small-latest";
+const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
+
+if (!MISTRAL_API_KEY) {
+  console.warn("⚠️  MISTRAL_API_KEY ist nicht gesetzt – der Bot nutzt nur Fallback-Sätze.");
+}
+
+// ============================================================================
 // HIER ARBEITEN DIE STUDIERENDEN: EXTERNE KI / API ANRUFEN
 // ============================================================================
 async function callAiBot(lastSentence: string): Promise<string> {
+  if (!MISTRAL_API_KEY) {
+    return "[Bot]: Und dann nahm die Geschichte eine seltsame Wendung.";
+  }
 
   try {
-    const prompt = `Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter), der hieran anknüpft: "${lastSentence}". Antworte NUR mit diesem einen Satz, keine Einleitung, keine Anführungszeichen.`;
-
-    const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`;
-
-    const res = await fetch(url, {
+    const res = await fetch(MISTRAL_URL, {
+      method: "POST",
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "text/plain, */*",
-        "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": `Bearer ${MISTRAL_API_KEY}`,
       },
+      body: JSON.stringify({
+        model: MISTRAL_MODEL,
+        temperature: 0.9,
+        max_tokens: 60,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. " +
+              "Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter). " +
+              "Antworte NUR mit diesem einen Satz, ohne Einleitung und ohne Anführungszeichen.",
+          },
+          {
+            role: "user",
+            content: `Letzter Satz der Geschichte: "${lastSentence}"`,
+          },
+        ],
+      }),
+      // Nicht ewig warten, falls die API hängt
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!res.ok) {
       const errBody = await res.text();
-      throw new Error(`Pollinations HTTP ${res.status}: ${errBody}`);
+      throw new Error(`Mistral HTTP ${res.status}: ${errBody}`);
     }
 
-    const text = await res.text();
+    const data = await res.json();
+    const text: string = data?.choices?.[0]?.message?.content ?? "";
+
     // Eventuelle Anführungszeichen am Anfang/Ende bereinigen
-    const cleanText = text.trim().replace(/^["']|["']$/g, "");
+    const cleanText = text.trim().replace(/^["'„“]|["'“”]$/g, "");
 
     return cleanText || "[Bot]: Plötzlich geschah etwas Unerwartetes.";
   } catch (err) {
-    console.error("Fehler beim Pollinations-Aufruf:", err);
+    console.error("Fehler beim Mistral-Aufruf:", err);
     return "[Bot]: Und dann nahm die Geschichte eine seltsame Wendung.";
   }
 }
