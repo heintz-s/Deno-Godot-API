@@ -29,34 +29,25 @@ async function callAiBot(lastSentence: string): Promise<string> {
   }
 
   try {
-    // Echter KI-Aufruf (z. B. Groq / Llama 3)
-    const res = await fetch("https://text.pollinations.ai/openai", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "mistral", // oder "openai", "llama"
-        messages: [
-          {
-            role: "system",
-            content: "Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter)."
-          },
-          { role: "user", content: `Der vorherige Satz war: "${lastSentence}"` }
-        ],
-        max_tokens: 50,
-      }),
-    });
+    const prompt = `Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter), der hieran anknüpft: "${lastSentence}". Antworte NUR mit diesem einen Satz, keine Einleitung, keine Anführungszeichen.`;
 
-    const data = await res.json();
-    return data.choices[0].message.content.trim();
+    // Simpler GET-Request direkt an den Text-Endpunkt:
+    const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=mistral`;
+    
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Pollinations HTTP ${res.status}`);
+    }
+
+    const text = await res.text();
+    // Eventuelle Anführungszeichen am Anfang/Ende bereinigen
+    const cleanText = text.trim().replace(/^["']|["']$/g, "");
+
+    return cleanText || "[Bot]: Plötzlich geschah etwas Unerwartetes.";
   } catch (err) {
-    // Wenn die API ausfällt, soll das Spiel trotzdem weiterlaufen
-    console.error("KI-Aufruf fehlgeschlagen:", err);
-    return "[Bot]: Der Bot war kurz sprachlos, doch die Geschichte ging weiter.";
+    console.error("Fehler beim Pollinations-Aufruf:", err);
+    return "[Bot]: Und dann nahm die Geschichte eine seltsame Wendung.";
   }
-}
 
 // ============================================================================
 // WEBSOCKET GAME ENGINE (Müssen Studierende kaum verändern)
