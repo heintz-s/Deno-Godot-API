@@ -32,7 +32,7 @@ async function callAiBot(lastSentence: string): Promise<string> {
     const prompt = `Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter), der hieran anknüpft: "${lastSentence}". Antworte NUR mit diesem einen Satz, keine Einleitung, keine Anführungszeichen.`;
 
     // Simpler GET-Request direkt an den Text-Endpunkt:
-    const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=mistral`;
+    const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`;
     
     const res = await fetch(url);
     if (!res.ok) {
