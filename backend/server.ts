@@ -28,28 +28,34 @@ async function callAiBot(lastSentence: string): Promise<string> {
     return `[Bot]: Plötzlich tauchte eine mysteriöse Katze auf und miaute zu: "${lastSentence}".`;
   }
 
-  // Echter KI-Aufruf (z. B. Groq / Llama 3)
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        {
-          role: "system",
-          content: "Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter)."
-        },
-        { role: "user", content: `Der vorherige Satz war: "${lastSentence}"` }
-      ],
-      max_tokens: 50,
-    }),
-  });
+  try {
+    // Echter KI-Aufruf (z. B. Groq / Llama 3)
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages: [
+          {
+            role: "system",
+            content: "Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter)."
+          },
+          { role: "user", content: `Der vorherige Satz war: "${lastSentence}"` }
+        ],
+        max_tokens: 50,
+      }),
+    });
 
-  const data = await res.json();
-  return data.choices[0].message.content.trim();
+    const data = await res.json();
+    return data.choices[0].message.content.trim();
+  } catch (err) {
+    // Wenn die API ausfällt, soll das Spiel trotzdem weiterlaufen
+    console.error("KI-Aufruf fehlgeschlagen:", err);
+    return "[Bot]: Der Bot war kurz sprachlos, doch die Geschichte ging weiter.";
+  }
 }
 
 // ============================================================================
@@ -69,6 +75,9 @@ Deno.serve({ port: 8080 }, (req) => {
 
     // 1. Spieler tritt bei
     if (data.type === "join") {
+      // Doppeltes Beitreten über denselben Socket verhindern
+      if (player) return;
+
       const roomId = data.roomId || "lobby";
       if (!rooms.has(roomId)) {
         rooms.set(roomId, {
@@ -79,14 +88,18 @@ Deno.serve({ port: 8080 }, (req) => {
           maxTurns: 6, // Nach 6 Sätzen ist die Geschichte fertig
         });
       }
-      currentRoom = rooms.get(roomId)!;
+      const room = rooms.get(roomId)!;
 
-      if (currentRoom.players.length >= 2) {
+      if (room.players.length >= 2) {
         socket.send(JSON.stringify({ type: "error", message: "Raum ist voll!" }));
         return;
       }
 
-      player = { id: `p${currentRoom.players.length + 1}`, name: data.name, ws: socket };
+      currentRoom = room;
+
+      // FIX: Eindeutige ID statt `p${players.length + 1}`
+      // (sonst können nach einem Reconnect zwei Spieler dieselbe ID haben)
+      player = { id: crypto.randomUUID(), name: data.name, ws: socket };
       currentRoom.players.push(player);
 
       socket.send(JSON.stringify({ type: "joined", myId: player.id }));
@@ -101,6 +114,12 @@ Deno.serve({ port: 8080 }, (req) => {
 
     // 2. Spieler sendet Satz ab
     if (data.type === "submit_sentence" && currentRoom && player) {
+      // Nur der aktive Spieler darf einen Satz abschicken
+      if (currentRoom.players.length < 2 || getActivePlayer(currentRoom) !== player) {
+        socket.send(JSON.stringify({ type: "error", message: "Du bist gerade nicht am Zug!" }));
+        return;
+      }
+
       currentRoom.sentences.push(data.text);
       currentRoom.turnIndex++;
       await handleGameProgression(currentRoom);
@@ -110,6 +129,11 @@ Deno.serve({ port: 8080 }, (req) => {
   socket.onclose = () => {
     if (currentRoom && player) {
       currentRoom.players = currentRoom.players.filter((p) => p !== player);
+
+      // FIX: Spielstand zurücksetzen, damit ein neuer Mitspieler sauber startet
+      currentRoom.sentences = [];
+      currentRoom.turnIndex = 0;
+
       broadcast(currentRoom, { type: "player_left", message: "Mitspieler hat das Spiel verlassen." });
       if (currentRoom.players.length === 0) rooms.delete(currentRoom.id);
     }
@@ -117,6 +141,11 @@ Deno.serve({ port: 8080 }, (req) => {
 
   return response;
 });
+
+function getActivePlayer(room: Room): Player | undefined {
+  const activeIndex = (room.turnIndex % 3) % 2;
+  return room.players[activeIndex];
+}
 
 async function handleGameProgression(room: Room) {
   // Ist das Spiel vorbei?
@@ -131,7 +160,7 @@ async function handleGameProgression(room: Room) {
   // Jeder 3. Zug gehört der KI (z. B. Zug Index 2, 5...)
   if (room.turnIndex % 3 === 2) {
     broadcast(room, { type: "bot_thinking", message: "🤖 KI-Bot schreibt die Geschichte weiter..." });
-    
+
     const botSentence = await callAiBot(room.sentences.at(-1)!);
     room.sentences.push(botSentence);
     room.turnIndex++;
@@ -149,17 +178,18 @@ async function handleGameProgression(room: Room) {
 
 function triggerNextTurn(room: Room) {
   // 1. Aktiven Spieler ermitteln
-  const activeIndex = (room.turnIndex % 3) % 2;
-  const activePlayer = room.players[activeIndex];
-  
-  const actualLastSentence = room.sentences.length > 0 
-    ? room.sentences.at(-1)! 
+  const activePlayer = getActivePlayer(room);
+  if (!activePlayer) return; // z. B. wenn ein Spieler inzwischen gegangen ist
+
+  const actualLastSentence = room.sentences.length > 0
+    ? room.sentences.at(-1)!
     : "(Beginne die Geschichte!)";
 
   // 2. An JEDEN Spieler eine eigene, gefilterte Nachricht senden
   for (const p of room.players) {
     if (p.ws.readyState === WebSocket.OPEN) {
-      const isTurn = (p.id === activePlayer.id);
+      // FIX: Objekte direkt vergleichen statt IDs
+      const isTurn = (p === activePlayer);
 
       // Hier wird serverseitig zensiert:
       const payload = {
