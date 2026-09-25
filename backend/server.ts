@@ -31,12 +31,19 @@ async function callAiBot(lastSentence: string): Promise<string> {
   try {
     const prompt = `Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter), der hieran anknüpft: "${lastSentence}". Antworte NUR mit diesem einen Satz, keine Einleitung, keine Anführungszeichen.`;
 
-    // Simpler GET-Request direkt an den Text-Endpunkt:
     const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`;
-    
-    const res = await fetch(url);
+
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/plain, */*",
+        "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+      },
+    });
+
     if (!res.ok) {
-      throw new Error(`Pollinations HTTP ${res.status}`);
+      const errBody = await res.text();
+      throw new Error(`Pollinations HTTP ${res.status}: ${errBody}`);
     }
 
     const text = await res.text();
