@@ -148,16 +148,25 @@ async function handleGameProgression(room: Room) {
 }
 
 function triggerNextTurn(room: Room) {
-  // Bestimmen, welcher der 2 Spieler dran ist (0 oder 1)
   const activeIndex = (room.turnIndex % 3) % 2;
   const activePlayer = room.players[activeIndex];
-  const lastSentence = room.sentences.length > 0 ? room.sentences.at(-1) : "(Beginne die Geschichte!)";
+  const lastSentence = room.sentences.length > 0 
+    ? room.sentences.at(-1) 
+    : "(Beginne die Geschichte!)";
 
-  broadcast(room, {
-    type: "new_turn",
-    activePlayerId: activePlayer.id,
-    lastSentence: lastSentence,
-  });
+  // An jeden Spieler eine individuell gefilterte Nachricht senden:
+  for (const p of room.players) {
+    if (p.ws.readyState === WebSocket.OPEN) {
+      const isTurn = (p.id === activePlayer.id);
+
+      p.ws.send(JSON.stringify({
+        type: "new_turn",
+        activePlayerId: activePlayer.id,
+        // Nur der Aktive sieht den Text, der andere sieht ihn verdeckt:
+        lastSentence: isTurn ? lastSentence : "🔒 (Verdeckt – Mitspieler schreibt...)",
+      }));
+    }
+  }
 }
 
 function broadcast(room: Room, msg: object) {
