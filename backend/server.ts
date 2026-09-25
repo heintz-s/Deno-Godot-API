@@ -52,8 +52,8 @@ async function callAiBot(lastSentence: string): Promise<string> {
           {
             role: "system",
             content:
-              "Du spielst ein Spiel, bei dem eine Geschichte Satz für Satz weitergeschrieben wird. " +
-              "Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch (maximal 15 Wörter). " +
+              "Du spielst ein Spiel, bei dem eine Geschichte abwechselnd von den Spielern Satz für Satz weitergeschrieben wird. " +
+              "Schreibe genau EINEN kurzen, kreativen Folgesatz auf Deutsch, der die Geschichte logisch fortsetzt oder voranbringt. " +
               "Antworte NUR mit diesem einen Satz, ohne Einleitung und ohne Anführungszeichen.",
           },
           {
