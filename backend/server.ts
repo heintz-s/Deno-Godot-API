@@ -25,7 +25,7 @@ async function callAiBot(lastSentence: string): Promise<string> {
 
   // Fallback, falls kein API-Key gesetzt ist (funktioniert auch offline!)
   if (!apiKey) {
-    return `[Bot]: Plötzlich tauchte eine mysteriöse Katze auf und miaute zu: "${lastSentence}".`;
+    return `[Bot]: Plötzlich geschah etwas unerwartetes...`;
   }
 
   try {
